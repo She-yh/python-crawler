@@ -1,0 +1,115 @@
+#-*- codeing = utf-8 -*-
+#@Time : 2020/4/28 16:04
+#@File : .py
+#@Software: PyCharm
+from bs4 import BeautifulSoup  #网页解析，获取数据
+import re   ##正则表达式，进行文字匹配
+import urllib.request,urllib.error   #制定url，获取网页数据
+import xlwt      #进行excel操作
+
+def main():
+    baseurl = "https://movie.douban.com/top250?start="
+    dataList = getData(baseurl)
+    savepath = ".\\豆瓣电影Top250.xls"
+    #askUrl(baseurl)
+    saveData(dataList,savepath)
+#影片详情连接的规则
+findlink=re.compile(r'<a href="(.*?)">')
+#图片链接
+findImgSrc=re.compile(r'<img.*src="(.*?)" ',re.S)#让换行符包含在字符中
+#片名
+findTitle= re.compile(r'<span class="title">(.*)</span>')
+#影片评分
+findRating=re.compile(r'<span class="rating_num" property="v:average">(.*)</span>')
+#评价人数
+findJudge=re.compile(r'<span>(\d*)人评价</span>')
+#找到简介
+findInq=re.compile(r'<span class="inq">(.*)</span>')
+#找到内容
+findBd=re.compile(r'<p class="">(.*?)</p>',re.S)
+
+#####爬取网页#####
+def getData(baseurl):
+    datalist=[]
+    for i in range(0,10):
+        url = baseurl+str(i*25)
+        html = askUrl(url)
+        #解析⬇
+        soup =BeautifulSoup(html,"html.parser")
+        for item in soup.find_all('div',class_="item"):
+            data=[]  #保存一部电影全部信息
+            item = str(item)
+
+            #影片详情连接
+            link = re.findall(findlink,item)[0]
+            data.append(link)
+
+            imgSrc=re.findall(findImgSrc,item)[0]
+            data.append(imgSrc)
+
+            titles = re.findall(findTitle,item)   #片名可能只有一个中文名，没有外国名，不用【0】
+            if(len(titles) == 2):
+                data.append(titles[0])     #添加中文名
+                data.append(titles[1].replace("/",""))  #去/符号
+            else:
+                data.append(titles[0])
+                data.append(' ')#就算没有也要留空给表格
+
+            rating = re.findall(findRating,item)[0]
+            data.append(rating)
+
+            judge = re.findall(findJudge, item)[0]
+            data.append(judge)
+
+
+            inq = re.findall(findInq,item)
+            if (len(inq)!=0):
+                inq=inq[0].replace("。","")# 试试不去句号会怎样
+                data.append(inq)
+            else:
+                data.append(" ")
+
+            bd=re.findall(findBd,item)[0]
+            bd=re.sub(r'<br(\s+?)/>(\s+)?'," ",bd)
+            bd=re.sub(r'<br/>',"",bd)
+            bd=re.sub('/','',bd)
+            data.append(bd.strip())#strip去掉前后指定的字符，默认是空格
+
+            datalist.append(data)
+    print(datalist)
+    return datalist
+
+#####得到指定url的网页内容######
+def askUrl(url):
+    head={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36"}
+    request= urllib.request.Request(url=url,headers=head)
+    html =""
+    # try:
+    response=urllib.request.urlopen(request)
+    html = response.read().decode("utf-8")
+    #     print(html)
+    # except urllib.error.URLError as e:
+    #     if hasattr(e,"code"):
+    #         print(e.code)
+    #     if hasattr(e,"reason"):
+    #         print(e.reason)
+    return html
+
+
+#####保存数据#####
+def saveData(datalist,savepath):
+    print("saving……")
+    book = xlwt.Workbook(encoding="utf-8",style_compression=0)  # 创建workbook一个文件
+    sheet = book.add_sheet('豆瓣电影Top250',cell_overwrite_ok=True)  # 一个个小的表单名字叫sheet1,是否要覆盖
+    col=("电影详情连接","图片链接","影片中文名","影片外国名","评分","评价数","概况","相关信息")#元组就是不能改变的列表
+    for i in range(0,8):
+        sheet.write(0,i,col[i])
+    for i in range(0,250): #行
+        print("这是第%d条"%(i+1))
+        for j in range(0,8):  #列
+            sheet.write(i+1,j,datalist[i][j])
+    book.save(savepath)  # 保存数据表到内存里
+
+
+if __name__=="__main__":
+    main()
